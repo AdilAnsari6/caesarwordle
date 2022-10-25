@@ -6,7 +6,7 @@ With the source code (caesar.go) and wordle.txt in the same folder:
 go run caesar.go
 ```
 ## How it works
-As a dictionary of valid dictionary entries, the program uses the valid word list from Wordle.
+As a dictionary of valid words, the program uses the dictionary from Wordle.
 To store words, each letter is stored as a 26-bit number, with the only high bit corresponding to that letter's position in the alphabet.
 The program spawns 26 goroutines, each handling the generation every possible 5 letter ciphertext beginning with the letter the thread is assigned to.
 ```

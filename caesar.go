@@ -1,3 +1,5 @@
+// Finds what Caesar ciphered word has the most valid dictionary entries it could be deciphered as.
+// by Adil Ansari
 package main
 import (
 "fmt"
@@ -9,74 +11,100 @@ import (
 "math/bits"
 "time"
 )
-var dict1 []float64
-var dict2 []float64
-var dict3 []float64
-var dict4 []float64
-var dict5 []float64
+
+var dict1 []uint
+var dict2 []uint
+var dict3 []uint
+var dict4 []uint
+var dict5 []uint
 var alphabet string = "abcdefghijklmnopqrstuvwxyz"
+var wordstested int = 0
+var most int = 0
+var oldmost int = 0
+var bestwords []string;
 var wg sync.WaitGroup
+var mutex sync.Mutex
+
 func main() {
 	start := time.Now()
+
 	infile, err := os.Open("wordle.txt")
 	var word string = ""
     if err != nil {
         log.Fatal(err)
     }
 	defer infile.Close()
+	
+	// Each letter is a stored as a binary number with the digit corresponding to its position in the alphabet turned on
 	scanner := bufio.NewScanner(infile)
 	for scanner.Scan() {
 		word = scanner.Text()
-		dict1 = append(dict1, math.Pow(2, float64(word[0]) - 97))
-		dict2 = append(dict2, math.Pow(2, float64(word[1]) - 97))
-		dict3 = append(dict3, math.Pow(2, float64(word[2]) - 97))
-		dict4 = append(dict4, math.Pow(2, float64(word[3]) - 97))
-		dict5 = append(dict5, math.Pow(2, float64(word[4]) - 97))
+		dict1 = append(dict1, uint(math.Pow(2, float64(word[0] - 97))))
+		dict2 = append(dict2, uint(math.Pow(2, float64(word[1] - 97))))
+		dict3 = append(dict3, uint(math.Pow(2, float64(word[2] - 97))))
+		dict4 = append(dict4, uint(math.Pow(2, float64(word[3] - 97))))
+		dict5 = append(dict5, uint(math.Pow(2, float64(word[4] - 97))))
 	}
 
+	// 26 routines, one for each first letter of the words (aXXXX, bXXXX, etc)
 	for i:=0; i<26; i++ {
 		go generator(i)
 		wg.Add(1)
 	}
-	wg.Wait()
+	wg.Wait()	
+					
+	fmt.Printf("\nThe best words are: ")
+	
+	for _,bestword := range bestwords {
+		fmt.Printf("%s, ", bestword)
+	}
+	fmt.Printf(" with %d dictionary entries in their Caesar cycle.", most)
 	elapsed := time.Since(start)
-	fmt.Printf("Total time: %s", elapsed)
+	fmt.Printf("\nTotal time: %s", elapsed)
 }
 
 func generator(i int) {
 	defer wg.Done()
-	var caesar1 [26]float64
-	var caesar2 [26]float64
-	var caesar3 [26]float64
-	var caesar4 [26]float64
-	var caesar5 [26]float64
-	var most int = 0
-	var wordstested int = 0
-	var bestword string = ""
+	var caesar1 [26]uint
+	var caesar2 [26]uint
+	var caesar3 [26]uint
+	var caesar4 [26]uint
+	var caesar5 [26]uint
 	var count int = 0
+	var currbest string = ""
+	var currbestshift [26]string
+	var prevwin bool
 	for j := 0; j < 26; j++ {
 		for k := 0; k < 26; k++ {
-			if i == j && j == k {
-				wordstested += 676
-				continue
-			}
 			for l := 0; l < 26; l++ {
-				if j == k && k == l {
-					wordstested += 26
-					continue
-				}
 				for m := 0; m < 26; m++ {
-					if k == l && l == m {
-						wordstested++
-						continue
+					for n := 0; n < 26; n++ {
+						// Using binary rotation to simulate a Caesar shift, wrapping after the 26th digit
+						caesar1[n] = bits.RotateLeft(uint(math.Pow(2,float64(i))), n)
+						if caesar1[n] > 33554432 {
+							caesar1[n] = bits.RotateLeft(caesar1[n], -26)
+						}
+						
+						caesar2[n] = bits.RotateLeft(uint(math.Pow(2,float64(j))), n)
+						if caesar2[n] > 33554432 {
+							caesar2[n] = bits.RotateLeft(caesar2[n], -26)
+						}	
+						caesar3[n] = bits.RotateLeft(uint(math.Pow(2,float64(k))), n)
+						if caesar3[n] > 33554432 {
+							caesar3[n] = bits.RotateLeft(caesar3[n], -26)
+						}
+						
+						caesar4[n] = bits.RotateLeft(uint(math.Pow(2,float64(l))), n)
+						if caesar4[n] > 33554432 {
+							caesar4[n] = bits.RotateLeft(caesar4[n], -26)
+						}
+						
+						caesar5[n] = bits.RotateLeft(uint(math.Pow(2,float64(m))), n)
+						if caesar5[n] > 33554432 {
+							caesar5[n] = bits.RotateLeft(caesar5[n], -26)
+						}
 					}
-					for n := 0; n<26; n++ {
-						caesar1[n] = float64(bits.RotateLeft(uint(math.Pow(2,float64(i))), n))
-						caesar2[n] = float64(bits.RotateLeft(uint(math.Pow(2,float64(j))), n))
-						caesar3[n] = float64(bits.RotateLeft(uint(math.Pow(2,float64(k))), n))
-						caesar4[n] = float64(bits.RotateLeft(uint(math.Pow(2,float64(l))), n))
-						caesar5[n] = float64(bits.RotateLeft(uint(math.Pow(2,float64(m))), n))
-					}
+					// Checking to see if any shift in a word's cycle matches a dictionary entry
 					count = 0
 					for a:=0; a<len(caesar1); a++ {
 						for b:=0; b<len(dict1); b++ {
@@ -85,19 +113,66 @@ func generator(i int) {
 							}
 						}
 					}
+					mutex.Lock()
 					wordstested++
-					if count <= most {
-						if wordstested % 25000 == 0 {
-							fmt.Printf("\nTHREAD %s\nWords tested: %d\nCurrent best word: %s\nValid shifts: %d", string(alphabet[i]), wordstested, bestword, most)
+					// If this word isn't the best, only print out every one hundred thousand words tested
+					if count < most {
+						if wordstested % 100000 == 0 {
+							fmt.Printf("\nROUTINE %s\nWords tested: %d (%.2f%% done)\nCurrent best words: ", string(alphabet[i]), wordstested, float64(wordstested)/118813.76)
+							for ind,bestword := range bestwords {
+								if ind >= 5 {
+									fmt.Printf("and %d more.", len(bestwords)-5)
+									break
+								} else {
+									fmt.Printf("%s, ", bestword)
+								}
+							}
+							fmt.Printf("\nValid shifts: %d", most)
 						}
+						mutex.Unlock()
 						continue
+					// If the word is the new best, update the high score and clear all previous best words
+					} else if count > most {
+						most = count
+						bestwords = bestwords[:0]
 					}
-					most = count
-					bestword = string(alphabet[int(math.Logb(caesar1[0]))]) + string(alphabet[int(math.Logb(caesar2[0]))]) + string(alphabet[int(math.Logb(caesar3[0]))]) + string(alphabet[int(math.Logb(caesar4[0]))]) + string(alphabet[int(math.Logb(caesar5[0]))])
-					fmt.Printf("\nTHREAD %s\nWords tested: %d\nCurrent best word: %s\nValid shifts: %d", string(alphabet[i]), wordstested, bestword, most)
+					// Check to see if this best word is just a Caesar shift of another best word
+					prevwin = false
+					currbest = string(alphabet[i]) + string(alphabet[j]) + string(alphabet[k]) + string(alphabet[l]) + string(alphabet[m])
+					for n := 0; n<26; n++ {
+						currbestshift[n] = ""
+						currbestshift[n] += string(alphabet[(int(currbest[0])-97+n)%26])
+						currbestshift[n] += string(alphabet[(int(currbest[1])-97+n)%26])
+						currbestshift[n] += string(alphabet[(int(currbest[2])-97+n)%26])
+						currbestshift[n] += string(alphabet[(int(currbest[3])-97+n)%26])
+						currbestshift[n] += string(alphabet[(int(currbest[4])-97+n)%26])
+						for _, bestword := range bestwords {
+							if currbestshift[n] == bestword {
+								prevwin = true
+								break
+							}
+						}
+						if prevwin {
+							break
+						}
+					}
+					// If this word is not a Caesar shift of another winner, add it to the list and print out the current best words
+					if !prevwin {
+						bestwords = append(bestwords, currbest)
+						fmt.Printf("\nROUTINE %s\nWords tested: %d (%.2f%% done)\nCurrent best words: ", string(alphabet[i]), wordstested, float64(wordstested)/118813.76)
+						for ind,bestword := range bestwords {
+							if ind >= 5 {
+								fmt.Printf("and %d more.", len(bestwords)-5)
+								break
+							} else {
+								fmt.Printf("%s, ", bestword)
+							}
+						}
+						fmt.Printf("\nValid shifts: %d", most)
+					}
+					mutex.Unlock()
 				}	
 			}	
 		}
 	}
-	fmt.Printf("\nBest word is: %s with %d valid rotated words.\n", bestword, most)
 }

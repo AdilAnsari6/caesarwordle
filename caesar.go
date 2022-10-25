@@ -5,19 +5,33 @@ import (
 "os"
 "bufio"
 "sync"
+"math"
+"math/bits"
+"time"
 )
-var dictionary []string
-var hof []string
+var dict1 []float64
+var dict2 []float64
+var dict3 []float64
+var dict4 []float64
+var dict5 []float64
+var alphabet string = "abcdefghijklmnopqrstuvwxyz"
 var wg sync.WaitGroup
 func main() {
+	start := time.Now()
 	infile, err := os.Open("wordle.txt")
+	var word string = ""
     if err != nil {
         log.Fatal(err)
     }
 	defer infile.Close()
 	scanner := bufio.NewScanner(infile)
 	for scanner.Scan() {
-		dictionary = append(dictionary, scanner.Text())
+		word = scanner.Text()
+		dict1 = append(dict1, math.Pow(2, float64(word[0]) - 97))
+		dict2 = append(dict2, math.Pow(2, float64(word[1]) - 97))
+		dict3 = append(dict3, math.Pow(2, float64(word[2]) - 97))
+		dict4 = append(dict4, math.Pow(2, float64(word[3]) - 97))
+		dict5 = append(dict5, math.Pow(2, float64(word[4]) - 97))
 	}
 
 	for i:=0; i<26; i++ {
@@ -25,17 +39,21 @@ func main() {
 		wg.Add(1)
 	}
 	wg.Wait()
+	elapsed := time.Since(start)
+	fmt.Printf("Total time: %s", elapsed)
 }
 
 func generator(i int) {
 	defer wg.Done()
-	var caesar [26]string
-	var alphabet string = "abcdefghijklmnopqrstuvwxyz"
+	var caesar1 [26]float64
+	var caesar2 [26]float64
+	var caesar3 [26]float64
+	var caesar4 [26]float64
+	var caesar5 [26]float64
 	var most int = 0
 	var wordstested int = 0
 	var bestword string = ""
 	var count int = 0
-	var prevwin bool = false
 	for j := 0; j < 26; j++ {
 		for k := 0; k < 26; k++ {
 			if i == j && j == k {
@@ -52,47 +70,30 @@ func generator(i int) {
 						wordstested++
 						continue
 					}
-					prevwin = false
 					for n := 0; n<26; n++ {
-						caesar[n] = ""
-						caesar[n] += string(alphabet[(i+n)%26])
-						caesar[n] += string(alphabet[(j+n)%26])
-						caesar[n] += string(alphabet[(k+n)%26])
-						caesar[n] += string(alphabet[(l+n)%26])
-						caesar[n] += string(alphabet[(m+n)%26])
-						for _, winner := range hof {
-							if caesar[n] == winner {
-								prevwin = true
-								break
-							}
-						}
-						if prevwin == true {
-							break
-						}
-					}
-					if prevwin == true {
-						wordstested++
-						continue
+						caesar1[n] = float64(bits.RotateLeft(uint(math.Pow(2,float64(i))), n))
+						caesar2[n] = float64(bits.RotateLeft(uint(math.Pow(2,float64(j))), n))
+						caesar3[n] = float64(bits.RotateLeft(uint(math.Pow(2,float64(k))), n))
+						caesar4[n] = float64(bits.RotateLeft(uint(math.Pow(2,float64(l))), n))
+						caesar5[n] = float64(bits.RotateLeft(uint(math.Pow(2,float64(m))), n))
 					}
 					count = 0
-					for _, shift := range caesar {
-						if shift == bestword {
-							break
-						}
-						for _, word := range dictionary {
-							if word == shift {
+					for a:=0; a<len(caesar1); a++ {
+						for b:=0; b<len(dict1); b++ {
+							if caesar1[a] == dict1[b] && caesar2[a] == dict2[b] && caesar3[a] == dict3[b] && caesar4[a] == dict4[b] && caesar5[a] == dict5[b] {
 								count++
 							}
 						}
 					}
-					if count < most {
-						wordstested++
+					wordstested++
+					if count <= most {
+						if wordstested % 25000 == 0 {
+							fmt.Printf("\nTHREAD %s\nWords tested: %d\nCurrent best word: %s\nValid shifts: %d", string(alphabet[i]), wordstested, bestword, most)
+						}
 						continue
 					}
-					wordstested++
 					most = count
-					bestword = caesar[0]
-					hof = append(hof, bestword)
+					bestword = string(alphabet[int(math.Logb(caesar1[0]))]) + string(alphabet[int(math.Logb(caesar2[0]))]) + string(alphabet[int(math.Logb(caesar3[0]))]) + string(alphabet[int(math.Logb(caesar4[0]))]) + string(alphabet[int(math.Logb(caesar5[0]))])
 					fmt.Printf("\nTHREAD %s\nWords tested: %d\nCurrent best word: %s\nValid shifts: %d", string(alphabet[i]), wordstested, bestword, most)
 				}	
 			}	
